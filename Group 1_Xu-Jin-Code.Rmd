@@ -1,0 +1,246 @@
+---
+title: "Graduate Bitcoin Project"
+author: "Xu, Jin"
+date: "11/28/2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## 1. Data Preparations
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+library(zoo)
+data <- read.table("BTC-USD-2013-2017.csv", sep=",", header=TRUE); attach(data) # original data
+dates <- seq(as.Date('2013-01-01'), by = 'days', length = 1826) # transform to date formats
+data$Date <- dates # append to original data
+data <- read.zoo(data) # zoo formats
+plot.zoo(data[,1], main = "BTC/USD", xlab = "Year", ylab = "Dollars")
+plot.zoo(data, main = "all variables", xlab = "Year") 
+
+```   
+
+## 2. Bitcoin Data
+
+### 2.1 Visualize Data
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+
+library(astsa);library(PerformanceAnalytics); library(evir);library(zoo)
+bitcoin.logreturn <- diff(log(data[,1]))*100
+bitcoin.logreturn.squared <- bitcoin.logreturn**2
+par(mfrow=c(1,2))
+plot.zoo(data[,1], main = "BTC/USD", xlab = "Year", ylab = "Dollars")
+plot.zoo(bitcoin.logreturn, main = "BTC/USD Log Return", xlab = "Year")
+par(mfrow=c(1,1))
+acf(coredata(bitcoin.logreturn),lag.max = 200)
+acf(coredata(bitcoin.logreturn**2), lag.max = 100);pacf(bitcoin.logreturn)
+
+bitcoin.logreturn.squared <- bitcoin.logreturn**2
+
+
+```
+
+### 2.2 Check Normality
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+
+par(mfrow=c(1,2))
+qqnorm(bitcoin.logreturn);qqline(bitcoin.logreturn)
+hist(bitcoin.logreturn,main = "Histogram", xlab = "Return")
+
+```
+
+### 2.3 Fit an ARMA Model Using auto.arima
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+
+library(forecast)
+auto.arima(bitcoin.logreturn, seasonal = FALSE, ic = "bic")
+
+```
+
+ARMA model: 
+$$X_t = $$
+
+
+### 2.4 Check Residuals of ARMA Model
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+
+library(astsa)
+btc.logreturn.return <- sarima(bitcoin.logreturn, 3, 0, 2)
+btc.logreturn.return
+
+```
+
+### 2.5 check residuals 
+
+#### 2.5.1 Visualize Residuals and Squared Residuals
+
+```{r, echo = TRUE, eval = TRUE, message=FALSE}
+
+res.btc.logreturn.return <- resid(btc.logreturn.return$fit)
+par(mfrow=c(2,2))
+qqnorm(res.btc.logreturn.return);qqline(res.btc.logreturn.return);
+hist(res.btc.logreturn.return); acf(res.btc.logreturn.return)
+mtext("Residuals", side = 3, line =2, outer = TRUE)
+res.square.btc.logreturn.return <- res.btc.logreturn.return**2
+par(mfrow=c(1,2))
+qqnorm(res.square.btc.logreturn.return);qqline(res.square.btc.logreturn.return);
+acf(res.square.btc.logreturn.return,lag.max = 100)
+#mtext("Squared Residuals ", side = 3, line =2, outer = TRUE)
+
+```
+
+#### 2.5.2 ARCH Engle's Test
+
+```{r, echo = TRUE, eval = TRUE, message=FALSE}
+
+library(aTSA)
+arch.test(arima(bitcoin.logreturn, order = c(3,0,2)))
+
+```
+
+Therefore, squared residuals are heteroscedastic.
+
+
+
+### Fit Garch Model
+
+```{r, echo = TRUE, eval = TRUE, message=FALSE}
+library(fGarch)
+source("garchAuto.R")
+#fit = garchAuto(bitcoin.logreturn, cores=8, trace=TRUE) ## can only work in MAC
+
+btc.garch1 = garchFit(~arma(3,2)+garch(1,1), cond.dist = "std", data = bitcoin.logreturn, trace = FALSE, include.mean = FALSE)
+btc.garch2 = garchFit(~arma(3,2)+garch(1,1), cond.dist = "sstd", data = bitcoin.logreturn, trace = FALSE, include.mean = FALSE)
+summary(btc.garch1)
+summary(btc.garch2)
+
+btc.garch3 = garchFit(~garch(1,1), cond.dist = "std", data = bitcoin.logreturn, trace = FALSE, include.mean = FALSE)
+btc.garch4 = garchFit(~garch(1,1), cond.dist = "sstd", data = bitcoin.logreturn, trace = FALSE, include.mean = FALSE)
+summary(btc.garch3)
+summary(btc.garch4)
+
+btc.garch5 = garchFit(~arma(1,3)+garch(1,1), cond.dist = "std", data = bitcoin.logreturn, trace = FALSE, include.mean = FALSE)
+btc.garch6 = garchFit(~arma(1,3)+garch(1,1), cond.dist = "sstd", data = bitcoin.logreturn, trace = FALSE, include.mean = FALSE)
+summary(btc.garch5)
+summary(btc.garch6)
+
+
+#btc.garch1.res=btc.garch1@residuals	# residuals time series
+#btc.garcho.res=btc.garcho@residuals	# residuals time series
+#acf(btc.garch1.res); acf(btc.garch1.res**2)
+#acf(btc.garcho.res); acf(btc.garcho.res**2)
+
+```
+
+```{r, echo = TRUE, eval = TRUE, message=FALSE}
+par(mfrow=c(2,1))
+btc.garch5.res=btc.garch5@residuals	# residuals time series
+acf(btc.garch5.res,lag.max = 100); acf(btc.garch5.res**2,lag.max = 100)
+
+```
+
+```{r, echo = TRUE, eval = TRUE, message=FALSE}
+btc.garch5.pred=predict(btc.garch5,n.ahead=300,trace=F, plot = TRUE)
+
+```
+
+### Literature Review of Univariate Garch model
+
+
+
+## Data Manipulation
+
+### NA data equals previous day
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+library(timeSeries)
+# Equal non-existent data to previous day's
+data.previous <- interpNA(data, method = "before")
+# calculate log return
+dataset.log.previous <- na.trim(diff(log(data.previous)))
+plot.zoo(dataset.log.previous, main = "Returns with NA data Equaling Previous Day")
+```
+
+### CCF
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+for (m in (2:ncol(dataset.log.previous))) {
+  ccfvalues <- ccf(dataset.log.previous[,m], dataset.log.previous[,1])
+  ccfvalues
+  lag2.plot(dataset.log.previous[,1], dataset.log.previous[,m],10)
+}
+```
+
+
+### Remove row with NA
+
+```{r, echo = TRUE, eval = TRUE,message=FALSE}
+library(timeSeries)
+# remove rows with non-existent data
+data.complete <- removeNA(data)
+# calculate log return
+dataset.log.complete <- removeNA(diff(log(data.complete)))
+plot.zoo(dataset.log.complete, main = "Returns with NA Data Removed")
+```
+
+
+
+### fit model
+
+$$X_t = \beta'z_t+y_t^* = \beta_1 Fed_{t-1} +  \beta_2 EURUSD_{t-1} + \beta_3 DJI_{t-1} + \beta_4 Gold_{t-1} + \beta_5 Oil_{t-1} + \beta_6 RUT_{t-1} + \beta_7 GSPC_{t-1} + \beta_8 EEM_{t-1}$$
+
+$$\phi(B) y_t^* = \theta(B) y_t$$
+or
+
+$$y_t^* = \beta_0 + \beta_1 y_{t-1} + \beta_2 y_{t-2}$$
+
+$$y_t = \sigma_t \epsilon_t$$
+
+$$\sigma_t^2 = \alpha_0 + \sum_{j=1}^m{\alpha_j}y_{t-j}^2 + \sum_{j=1}^s{\beta_j}\sigma_{t-j}^2=\alpha_0+\alpha y_{t-1}^2 + \beta \sigma_{t-1}^2$$
+
+```{r, echo = TRUE, eval = FALSE,message=FALSE}
+dlp <- as.data.frame(dataset.log.previous) 
+
+library(dplyr); library(knitr)
+
+modeldata <- mutate(dlp, z1 = lag(Federal.Rate,7),z2 = lag(EURUSD,2), z3 = lag(DJI,6),z4 = lag(Gold,5),z5 = lag(Crude.Oil,7),z6 = lag(RUT,6),z7 = lag(GSPC,6),z8 = lag(EEM,9))
+modeldata1 <- modeldata %>% select(Adj.Close,z1, z2, z3, z4, z5, z6, z7, z8)
+
+modelfit <- lm(Adj.Close ~ ., data = modeldata1)
+summary(modelfit)
+
+```
+```{r, echo = TRUE, eval = FALSE,message=FALSE}
+res <- modelfit$residuals
+par(mfrow=c(1,2))
+qqnorm(res);qqline(res);acf(res)
+
+```
+```{r, echo = TRUE, eval = FALSE,message=FALSE}
+auto.arima(res, seasonal = FALSE, ic = "bic")
+resarma <- sarima(res, 3, 0, 2)
+```
+```{r, echo = TRUE, eval = FALSE,message=FALSE}
+resss <- resid(resarma$fit)
+par(mfrow=c(2,1))
+acf(resss);acf(resss**2,lag.max = 100)
+```
+
+```{r, echo = TRUE, eval = FALSE,message=FALSE}
+source("garchAuto.R")
+fit1 = garchAuto(res, cores=8, trace=TRUE) ## can only work in MAC
+fit1
+```
+
+```{r, echo = TRUE, eval = FALSE,message=FALSE}
+res.garch5 = garchFit(~arma(1,3)+garch(1,1), cond.dist = "std", data = res, trace = FALSE, include.mean = FALSE)
+
+par(mfrow=c(2,1))
+res.garch5.res=res.garch5@residuals	# residuals time series
+acf(res.garch5.res,lag.max = 100); acf(res.garch5.res**2,lag.max = 100)
+
+```
